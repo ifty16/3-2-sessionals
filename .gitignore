@@ -1,0 +1,40 @@
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.webm
+*.m4v
+*.mpg
+*.mpeg
+*.3gp
+
+# Compressed files
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bz2
+*.xz
+*.iso
+*.tar.gz
+*.tar.bz2
+
+# Large files
+*.bin
+*.exe
+*.dmg
+*.pkg
+*.deb
+
+# Common large file patterns
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
