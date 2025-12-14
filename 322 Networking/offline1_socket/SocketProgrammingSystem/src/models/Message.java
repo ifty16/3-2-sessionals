@@ -26,5 +26,4 @@ public class Message implements Serializable {
     public Date getTimestamp() { return timestamp; }
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
-    public void setTimestamp(Date timestamp) { this.timestamp = timestamp; }
 }

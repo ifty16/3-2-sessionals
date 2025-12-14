@@ -1,6 +1,6 @@
 package client;
 
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayOutputStream;  
 import java.io.File;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -25,15 +25,15 @@ public class Client {
 
     public boolean connect(String host, int port){
         try {
-            socket = new Socket(host, port);
+            socket = new Socket(host, port); //localhost fore own machine er port 6666
             out = new ObjectOutputStream(socket.getOutputStream());
             in = new ObjectInputStream(socket.getInputStream());
 
             System.out.println("Connected to server at " + host + ":" + port);
 
             // Authentication
-            String message = (String) in.readObject();
-            System.out.println(message); // "Enter your username:"
+            String message = (String) in.readObject(); // "Enter your username:"
+            System.out.println(message); 
 
             username = scanner.nextLine().trim();
             out.writeObject(username);
@@ -107,12 +107,9 @@ public class Client {
                         System.out.println("Invalid choice. Please try again.");
                 }
                 
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input. Please enter a number.");
             } catch (Exception e) {
-                System.err.println("Error : " + e.getMessage());
-
-            } 
+                System.out.println("Error: " + e.getMessage());
+            }
         }
 
     }
@@ -249,74 +246,101 @@ public class Client {
         String[] finalParts = finalResponse.split(Protocol.DELIMITER);
         
         if (finalParts[0].equals(Protocol.SUCCESS)) {
-            System.out.println("✓ " + finalParts[1]);
+            System.out.println(finalParts[1]);
         } else {
-            System.out.println("✗ Upload failed: " + finalParts[1]);
+            System.out.println("Upload failed: " + finalParts[1]);
         }
     }
+
+
     private void downloadFile() throws Exception {
-        System.out.print("Download from (enter username or 'self' for your files): ");
-        String owner = scanner.nextLine().trim();
-        
-        if (owner.equalsIgnoreCase("self")) {
-            owner = username;
-        }
-        
-        System.out.print("Enter file name: ");
-        String fileName = scanner.nextLine().trim();
-        
-        System.out.print("Save as (leave blank to keep original name): ");
-        String saveName = scanner.nextLine().trim();
-        if (saveName.isEmpty()) {
-            saveName = fileName;
-        }
-        
-        // Send download request
-        String downloadRequest = Protocol.DOWNLOAD_REQUEST + Protocol.DELIMITER + owner + Protocol.DELIMITER + fileName;
-        sendCommand(downloadRequest);
-        
-        // Get response
-        String response = (String) in.readObject();
-        String[] parts = response.split(Protocol.DELIMITER);
-        
-        if (parts[0].equals(Protocol.ERROR)) {
-            System.out.println("Download failed: " + parts[1]);
-            return;
-        }
-        
-        if (!parts[0].equals(Protocol.DOWNLOAD_START)) {
-            System.out.println("Unexpected response: " + response);
-            return;
-        }
-        
-        String downloadFileName = parts[1];
-        long fileSize = Long.parseLong(parts[2]);
-        
-        System.out.println("Downloading: " + downloadFileName + " (" + fileSize + " bytes)");
-        
-        // Receive file chunks
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        
-        while (true) {
-            String data = (String) in.readObject();
-            
-            if (data.startsWith(Protocol.DOWNLOAD_COMPLETE)) {
-                break;
-            }
-            
-            byte[] chunk = Base64.getDecoder().decode(data);
-            baos.write(chunk);
-        }
-        
-        // Save file
-        byte[] fileData = baos.toByteArray();
-        Files.write(Paths.get(saveName), fileData);
-        
-        System.out.println("File downloaded successfully: " + saveName + " (" + fileData.length + " bytes)");
+    System.out.print("Download from (enter username or 'self' for your files): ");
+    String owner = scanner.nextLine().trim();
+    
+    if (owner.equalsIgnoreCase("self")) {
+        owner = username;
     }
-    /**
-     * Makes a file request
-     */
+    
+    System.out.print("Enter file name: ");
+    String fileName = scanner.nextLine().trim();
+    
+    System.out.print("Enter download path (leave blank for current directory): ");
+    String downloadPath = scanner.nextLine().trim();
+    
+    // Determine save location
+    String savePath;
+    if (downloadPath.isEmpty()) {
+        // Save in current directory with original filename
+        savePath = fileName;
+    } else {
+        // Check if path is a directory or full file path
+        File pathFile = new File(downloadPath);
+        
+        if (pathFile.isDirectory() || downloadPath.endsWith("/") || downloadPath.endsWith("\\")) {
+            // It's a directory - append filename
+            savePath = downloadPath + File.separator + fileName;
+        } else {
+            // It's a full file path - use as is
+            savePath = downloadPath;
+        }
+    }
+    
+    System.out.println("Will save as: " + savePath);
+    
+    // Send download request
+    String downloadRequest = Protocol.DOWNLOAD_REQUEST + Protocol.DELIMITER + 
+                            owner + Protocol.DELIMITER + fileName;
+    sendCommand(downloadRequest);
+    
+    // Get response
+    String response = (String) in.readObject();
+    String[] parts = response.split(Protocol.DELIMITER);
+    
+    if (parts[0].equals(Protocol.ERROR)) {
+        System.out.println("Download failed: " + parts[1]);
+        return;
+    }
+    
+    if (!parts[0].equals(Protocol.DOWNLOAD_START)) {
+        System.out.println("Unexpected response: " + response);
+        return;
+    }
+    
+    String downloadFileName = parts[1];
+    long fileSize = Long.parseLong(parts[2]);
+    
+    System.out.println("Downloading: " + downloadFileName + " (" + fileSize + " bytes)");
+    
+    // Receive file chunks
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    int counter = 0;
+    while (true) {
+        String data = (String) in.readObject();
+        
+        if (data.startsWith(Protocol.DOWNLOAD_COMPLETE)) {
+            break;
+        }
+        
+        byte[] chunk = Base64.getDecoder().decode(data);
+        baos.write(chunk);
+        System.out.println("written chunk no. " + counter);
+        counter++;
+    }
+    
+    // Create parent directories if they don't exist
+    File saveFile = new File(savePath);
+    File parentDir = saveFile.getParentFile();
+    if (parentDir != null && !parentDir.exists()) {
+        parentDir.mkdirs();
+    }
+    
+    // Save file
+    byte[] fileData = baos.toByteArray();
+    Files.write(Paths.get(savePath), fileData);
+    
+    System.out.println("File downloaded successfully: " + savePath + " (" + fileData.length + " bytes)");
+}
+    //make file request
     private void makeFileRequest() throws Exception {
         System.out.print("Enter file description: ");
         String description = scanner.nextLine().trim();

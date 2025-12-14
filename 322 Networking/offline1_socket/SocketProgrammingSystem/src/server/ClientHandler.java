@@ -25,31 +25,41 @@ public class ClientHandler extends Thread{
 
     public ClientHandler(Socket socket) {
         this.socket = socket;
-        this.isAuthenticated = false;
+        this.isAuthenticated = false; // initially not logged in
     }
     
     
     @Override
-    public void run() {
-        try {
-            // Initialize input and output streams
-            out = new ObjectOutputStream(socket.getOutputStream());
-            in = new ObjectInputStream(socket.getInputStream());
+public void run() {
+    try {
+        // Initialize input and output streams
+        out = new ObjectOutputStream(socket.getOutputStream());
+        in = new ObjectInputStream(socket.getInputStream());
 
-            // authenticate
-            if(!authenticate()){
-                cleanup();
-                return;
-            }
-
-            //main command loop
-            handleClientCommands();
-        } catch (Exception e) {
-            System.out.println("Error in ClientHandler: " + e.getMessage());
-        } finally {
+        // authenticate
+        if(!authenticate()){
             cleanup();
+            return;
         }
+
+        //main command loop
+        handleClientCommands();
+        
+    } catch (java.io.EOFException e) {
+        // Client disconnected abruptly
+        System.out.println("Client disconnected abruptly: " + username);
+    } catch (java.net.SocketException e) {
+        // Socket closed
+        System.out.println("Socket closed for client: " + username);
+    } catch (IOException e) {
+        System.err.println("IO error with client " + username + ": " + e.getMessage());
+    } catch (Exception e) {
+        System.out.println("Error in ClientHandler: " + e.getMessage());
+    } finally {
+        // ALWAYS cleanup, even on abrupt disconnect
+        cleanup();
     }
+}
 
 
     //send message to client
@@ -77,7 +87,7 @@ public class ClientHandler extends Thread{
         //create user directory if not exists
         FileManager.createUserDirectory(username); 
 
-        sendMessage(Protocol.SUCCESS + Protocol.DELIMITER + "login successful. welcome "+username +" !");
+        sendMessage(Protocol.SUCCESS + Protocol.DELIMITER + "login successful. welcome "+username +" !"); // SUCCESS:::login successful. welcome user !
         
         System.out.println("User "+ username +" logged in.");
         return true;
@@ -91,14 +101,17 @@ public class ClientHandler extends Thread{
                 //Cancel any ongoing uploads
                 List<String> toCancel = new ArrayList<>();
 
+
+                //kon file bad jabe
                 for (String fileID : ServerConfig.getAllFileChunksMap().keySet()) {
 
-                    FileMetadata metadata = ServerConfig.getFileMetadata(fileID);
+                    FileMetadata metadata = ServerConfig.getFileMetadata(fileID); // metadata{fileID, fileName, fileSize, owner, accessType}
                     if (metadata != null && metadata.getOwner().equals(username)) {
                         toCancel.add(fileID);
                     }
                 }
                 
+
                 for (String fileID : toCancel) {
                     ServerConfig.cancelUpload(fileID);
                 }
@@ -108,7 +121,7 @@ public class ClientHandler extends Thread{
             }
             
             if (socket != null && !socket.isClosed()) {
-                socket.close();
+                socket.close(); // close connection
             }
         } catch (IOException e) {
             System.err.println("Error during cleanup: " + e.getMessage());
@@ -116,21 +129,39 @@ public class ClientHandler extends Thread{
     }
 
     //handle client commands
-    private void handleClientCommands() throws Exception {
-        while(isAuthenticated){
-            try {
-                String command = (String) in.readObject();
-                processCommand(command);
-
-            } catch (Exception e) {
+private void handleClientCommands() throws Exception {
+    while(isAuthenticated){
+        try {
+            String command = (String) in.readObject();
+            
+            // Check for null (client disconnected)
+            if (command == null) {
+                System.out.println("Received null command, client disconnected: " + username);
+                break;
             }
+            
+            // System.out.println("Received command from " + username + ": " + command);
+            processCommand(command);
+
+        } catch (java.io.EOFException e) {
+            // Client disconnected abruptly (Ctrl+C, crash, etc.)
+            System.out.println("Client disconnected abruptly (EOF): " + username);
+            break;
+        } catch (java.net.SocketException e) {
+            // Socket closed (network issue, Ctrl+C, etc.)
+            System.out.println("Socket closed for client: " + username);
+            break;
+        } catch (Exception e) {
+            System.out.println("Error processing command from " + username + ": " + e.getMessage());
+            // Don't break here - only for disconnect errors
         }
     }
+}
 
     private void processCommand(String command) throws Exception {
         //process different commands here
 
-        String[] parts = command.split(Protocol.DELIMITER);
+        String[] parts = command.split(Protocol.DELIMITER); //Protocol.UPLOAD_CHUNK + Protocol.DELIMITER + fileID + Protocol.DELIMITER + chunkBase64;
         String cmd = parts[0];
 
         switch (cmd) {
@@ -197,7 +228,7 @@ public class ClientHandler extends Thread{
             response.append(client).append(" ").append(status).append("\n");
         }
         
-        sendMessage(response.toString());
+        sendMessage(response.toString()); 
     }
 
     private void handleListOwnFiles() throws Exception {
@@ -237,55 +268,88 @@ public class ClientHandler extends Thread{
         sendMessage(response.toString());
     }
     private void handleUploadRequest(String[] parts) throws Exception {
-        String fileName = parts[1];
-        long fileSize = Long.parseLong(parts[2]);
-        String accessType = parts[3];
-        String requestID = parts.length > 4 ? parts[4] : null;
-        
-        // Check if request ID provided and valid
-        if (requestID != null && !requestID.equals("null")) {
-            FileRequest request = ServerConfig.getFileRequest(requestID);
-            if (request == null) {
-                sendMessage(Protocol.ERROR + Protocol.DELIMITER + "Invalid request ID");
-                return;
-            }
-            // Force public access for requested files
-            accessType = Protocol.PUBLIC;
-        }
-        
-        // Check buffer capacity
-        if (!ServerConfig.canAccommodateFile(fileSize)) {
-            sendMessage(Protocol.BUFFER_FULL + Protocol.DELIMITER + "Server buffer is full. Please try later.");
+    String fileName = parts[1];
+    long fileSize = Long.parseLong(parts[2]);
+    String accessType = parts[3];
+    String requestID = parts.length > 4 ? parts[4] : null;
+    
+    // Check if request ID provided and valid
+    if (requestID != null && !requestID.equals("null")) {
+        FileRequest request = ServerConfig.getFileRequest(requestID);
+        if (request == null) {
+            sendMessage(Protocol.ERROR + Protocol.DELIMITER + "Invalid request ID");
             return;
         }
-        
-        // Generate random chunk size
-        Random random = new Random();
-        int chunkSize = ServerConfig.MIN_CHUNK_SIZE + random.nextInt(ServerConfig.MAX_CHUNK_SIZE - ServerConfig.MIN_CHUNK_SIZE + 1);
-        
-        // Generate file ID
-        String fileID = ServerConfig.generateFileID();
-        
-        // Create metadata
-        FileMetadata metadata = new FileMetadata(fileName, fileSize, username, accessType);
-        metadata.setFileID(fileID);
-        metadata.setRequestID(requestID);
-        ServerConfig.registerFile(fileID, metadata);
-        
-        // Initialize upload tracking
-        ChunkInfo chunkInfo = new ChunkInfo(fileID, chunkSize, fileSize);
-        ServerConfig.startUpload(fileID, chunkInfo);
-        ServerConfig.addBufferUsage(fileSize);
-        
-        // Send confirmation
-        sendMessage(Protocol.UPLOAD_CONFIRMED + Protocol.DELIMITER + fileID + Protocol.DELIMITER + chunkSize);
-        
-        System.out.println("Upload initiated for " + fileName + " by " + username);
+        // Force public access for requested files
+        accessType = Protocol.PUBLIC;
     }
-    /**
-     * Handles UPLOAD_CHUNK - receives a single chunk
-     * Format: UPLOAD_CHUNK|||fileID|||chunkData(base64)
-     */
+    
+    // Check if file already exists for this user
+    String existingFileID = ServerConfig.findExistingFile(username, fileName);
+    
+    if (existingFileID != null) {
+        // File exists - update metadata instead of creating new
+        FileMetadata existingMetadata = ServerConfig.getFileMetadata(existingFileID);
+        
+        // Check if file size changed (re-upload with different content)
+        if (existingMetadata.getFileSize() != fileSize) {
+            // Size changed - need to re-upload
+            // Check buffer capacity for the NEW size
+            if (!ServerConfig.canAccommodateFile(fileSize)) {
+                sendMessage(Protocol.BUFFER_FULL + Protocol.DELIMITER + "Server buffer is full. Please try later.");
+                return;
+            }
+        } else {
+            // Same file, just updating access type
+            existingMetadata.setAccessType(accessType);
+            sendMessage(Protocol.SUCCESS + Protocol.DELIMITER + "File access type updated to " + accessType);
+            FileManager.logActivity(username, fileName, "UPDATE", "SUCCESS", accessType);
+            return;
+        }
+    }
+    
+    // Check buffer capacity for NEW uploads
+    if (!ServerConfig.canAccommodateFile(fileSize)) {
+        sendMessage(Protocol.BUFFER_FULL + Protocol.DELIMITER + "Server buffer is full. Please try later.");
+        return;
+    }
+    
+    // Generate random chunk size
+    Random random = new Random();
+    int chunkSize = ServerConfig.MIN_CHUNK_SIZE + random.nextInt(ServerConfig.MAX_CHUNK_SIZE - ServerConfig.MIN_CHUNK_SIZE + 1);
+    
+    // Generate or reuse file ID
+    String fileID;
+    if (existingFileID != null) {
+        // Re-uploading existing file with new content
+        fileID = existingFileID;
+        // Remove old entry before creating new one
+        ServerConfig.removeFile(existingFileID);
+    } else {
+        // Brand new file
+        fileID = ServerConfig.generateFileID();
+    }
+    
+    // Create metadata
+    FileMetadata metadata = new FileMetadata(fileName, fileSize, username, accessType);
+    metadata.setFileID(fileID);
+    metadata.setRequestID(requestID);
+    ServerConfig.registerFile(fileID, metadata);
+    
+    // Initialize upload tracking
+    ChunkInfo chunkInfo = new ChunkInfo(fileID, chunkSize, fileSize);
+    ServerConfig.startUpload(fileID, chunkInfo);
+    ServerConfig.addBufferUsage(fileSize);
+    
+    // Send confirmation
+    sendMessage(Protocol.UPLOAD_CONFIRMED + Protocol.DELIMITER + fileID + Protocol.DELIMITER + chunkSize);
+    
+    System.out.println("Upload initiated for " + fileName + " by " + username + 
+                      (existingFileID != null ? " (re-upload)" : " (new file)"));
+}
+    
+    //Handles UPLOAD_CHUNK - receives a single chunk
+    //Format: UPLOAD_CHUNK|||fileID|||chunkData(base64)
     private void handleUploadChunk(String[] parts) throws Exception {
         String fileID = parts[1];
         String chunkDataBase64 = parts[2];
@@ -305,10 +369,10 @@ public class ClientHandler extends Thread{
         // Send acknowledgment
         sendMessage(Protocol.CHUNK_ACK + Protocol.DELIMITER + fileID);
     }
-    /**
-     * Handles UPLOAD_COMPLETE - finalizes upload
-     * Format: UPLOAD_COMPLETE|||fileID
-     */
+    
+     //Handles UPLOAD_COMPLETE - finalizes upload
+     //Format: UPLOAD_COMPLETE|||fileID
+     
     private void handleUploadComplete(String[] parts) throws Exception {
         String fileID = parts[1];
         
@@ -372,11 +436,10 @@ public class ClientHandler extends Thread{
         }
         
         // Send download start
-        sendMessage(Protocol.DOWNLOAD_START + Protocol.DELIMITER + 
-                   fileName + Protocol.DELIMITER + fileData.length);
+        sendMessage(Protocol.DOWNLOAD_START + Protocol.DELIMITER + fileName + Protocol.DELIMITER + fileData.length);
         
         // Send file in chunks
-        int chunkSize = ServerConfig.MAX_CHUNK_SIZE;
+        int chunkSize = ServerConfig.MAX_CHUNK_SIZE; // use max chunk size for download
         int offset = 0;
         
         while (offset < fileData.length) {
@@ -395,10 +458,9 @@ public class ClientHandler extends Thread{
         System.out.println("Download completed: " + fileName + " for " + username);
     }
     
-    /**
-     * Handles MAKE_FILE_REQUEST
-     * Format: MAKE_FILE_REQUEST|||description|||recipient
-     */
+    
+     //Format: MAKE_FILE_REQUEST|||description|||recipient
+     
     private void handleMakeFileRequest(String[] parts) throws Exception {
         String description = parts[1];
         String recipient = parts[2];
@@ -432,9 +494,8 @@ public class ClientHandler extends Thread{
         }
     }
     
-    /**
- * Handles VIEW_MESSAGES - shows all messages with unread indicator
- */
+    
+ // Handles VIEW_MESSAGES - shows all messages with unread indicator
 private void handleViewMessages() throws Exception {
     List<Message> allMessages = ServerConfig.getAllMessages(username);
     
@@ -459,17 +520,13 @@ private void handleViewMessages() throws Exception {
     sendMessage(response.toString());
 }
     
-    /**
-     * Handles VIEW_HISTORY
-     */
+    
     private void handleViewHistory() throws Exception {
         String history = FileManager.readActivityLog(username);
         sendMessage(Protocol.SUCCESS + Protocol.DELIMITER + history);
     }
     
-    /**
-     * Notifies requester when their file request is fulfilled
-     */
+    
     private void notifyFileRequestFulfilled(FileMetadata metadata) {
         FileRequest request = ServerConfig.getFileRequest(metadata.getRequestID());
         if (request == null) return;

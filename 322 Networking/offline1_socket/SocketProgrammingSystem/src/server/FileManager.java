@@ -51,9 +51,7 @@ public class FileManager {
     }
 }
 
-    /**
-     * Saves uploaded file chunks to disk
-     */
+    // Saves uploaded file chunks to disk
     public static boolean saveFile(String username, FileMetadata metadata, List<byte[]> chunks) {
         try {
             String filePath = ServerConfig.SERVER_DATA_DIR + username + "/" + metadata.getFileName();
@@ -73,9 +71,9 @@ public class FileManager {
         }
     }
 
-     /**
-     * Reads a file from disk for download
-     */
+     
+    //Reads a file from disk for download
+     
     public static byte[] readFile(String username, String fileName) {
         try {
             String filePath = ServerConfig.SERVER_DATA_DIR + username + "/" + fileName;
@@ -86,9 +84,9 @@ public class FileManager {
         }
     }
 
-    /**
-     * Reads the activity log for a user
-     */
+    
+     //Reads the activity log for a user
+     
     public static String readActivityLog(String username) {
         try {
             String logPath = ServerConfig.SERVER_DATA_DIR + username + "/activity_log.txt";

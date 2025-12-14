@@ -12,7 +12,7 @@ import models.FileRequest;
 import models.Message;
 
 public class ServerConfig {
-    public static final long MAX_BUFFER_SIZE = 500 * 1024 * 1024; // 50 MB
+    public static final long MAX_BUFFER_SIZE = 1500 * 1024 * 1024; // 1500 MB
     public static final int MIN_CHUNK_SIZE = 50*1024;
     public static final int MAX_CHUNK_SIZE = 500*1024;
     public static final int SERVER_PORT = 6666;
@@ -30,9 +30,9 @@ public class ServerConfig {
     // File requests: requestID -> FileRequest
     private static Map<String, FileRequest> fileRequests = new ConcurrentHashMap<>();
     // Ongoing uploads: fileID -> ChunkInfo
-    private static Map<String, ChunkInfo> ongoingUploads = new ConcurrentHashMap<>();
+    private static Map<String, ChunkInfo> ongoingUploads = new ConcurrentHashMap<>(); //upload progress track korar jonne
     // File chunks buffer: fileID -> List of byte arrays
-    private static Map<String, List<byte[]>> fileChunksBuffer = new ConcurrentHashMap<>();
+    private static Map<String, List<byte[]>> fileChunksBuffer = new ConcurrentHashMap<>(); //upload temp storage
     // Messages: username -> List<Message>
     private static Map<String, List<Message>> userMessages = new ConcurrentHashMap<>();
     
@@ -45,7 +45,7 @@ public class ServerConfig {
     //add online client
     public static void addOnlineClient(String username, ClientHandler handler){
         onlineClients.put(username, handler);
-        allClients.add(username);
+        allClients.add(username); //set
     }
 
     //getter
@@ -172,9 +172,13 @@ public class ServerConfig {
   
     
     // Message management
-    public static void addMessage(String username, Message message) {
-        userMessages.computeIfAbsent(username, k -> new ArrayList<>()).add(message);
-    }
+    // Message management
+public static void addMessage(String username, Message message) {
+    userMessages.computeIfAbsent(username, k -> new ArrayList<>()).add(message);
+    
+    // Immediately append to file
+    appendMessageToFile(username, message);
+}
     
     public static List<Message> getUnreadMessages(String username) {
         List<Message> messages = userMessages.get(username);
@@ -190,13 +194,10 @@ public class ServerConfig {
         return unread;
     }
 
-     /**
-     * Loads all existing users from server_data directory
-     * Should be called once at server startup
-     */
+     // shob directory er name gulo allClients e add korbe
     public static void loadExistingUsers() {
         try {
-            java.io.File dataDir = new java.io.File(SERVER_DATA_DIR);
+            java.io.File dataDir = new java.io.File(SERVER_DATA_DIR); // directory ta open korbe
             
             // Check if directory exists
             if (!dataDir.exists() || !dataDir.isDirectory()) {
@@ -205,7 +206,7 @@ public class ServerConfig {
             }
             
             // Get all subdirectories (each represents a user)
-            java.io.File[] userDirs = dataDir.listFiles(java.io.File::isDirectory);
+            java.io.File[] userDirs = dataDir.listFiles(java.io.File::isDirectory); // listfiles( file -> file.isDirectory() )     
             
             if (userDirs == null || userDirs.length == 0) {
                 System.out.println("No existing users found. Starting fresh.");
@@ -224,14 +225,12 @@ public class ServerConfig {
             
         } catch (Exception e) {
             System.err.println("Error loading existing users: " + e.getMessage());
-            e.printStackTrace();
+            e.printStackTrace(); // prints the stack trace for debugging. stack trace = kon line e error hoise etc
         }
     }
 
-    /**
- * Loads all existing files from activity logs
- * Should be called once at server startup after loadExistingUsers()
- */
+// file list er jonne activity log theke read korbe
+// age user name er list load kore nite hobe
 public static void loadExistingFiles() {
     try {
         int fileCount = 0;
@@ -248,17 +247,17 @@ public static void loadExistingFiles() {
             // Read log file and extract successful uploads
             try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(logFile))) {
                 String line;
-                while ((line = br.readLine()) != null) {
+                while ((line = br.readLine()) != null) { //actibity file er prottek line er jonne
                     // Parse log entry
                     // Format: [timestamp] File: name | Action: UPLOAD | Status: SUCCESS | Access: PUBLIC
                     if (line.contains("Action: UPLOAD") && line.contains("Status: SUCCESS")) {
                         String fileName = extractValue(line, "File: ", " |");  
                         String accessType = extractValue(line, "Access: ", "$");
 
-                        System.out.println("DEBUGGGG Extracted from log - fileName: " + fileName + ", accessType: " + accessType);
+                        // System.out.println("DEBUGGGG Extracted from log - fileName: " + fileName + ", accessType: " + accessType);
                         
                         if (fileName != null && accessType != null) {
-                            // Check if file still exists on disk
+                            // Check if file still exists on disk jeta log e pailam. dlt implement korle pore lagbe
                             String filePath = SERVER_DATA_DIR + username + "/" + fileName;
                             java.io.File file = new java.io.File(filePath);
                             
@@ -280,71 +279,59 @@ public static void loadExistingFiles() {
         
     } catch (Exception e) {
         System.err.println("Error loading existing files: " + e.getMessage());
-        e.printStackTrace();
+        e.printStackTrace();// getmessage = kon error hoise , stack trace = kon line e hoise
     }
 }
 
-/**
- * Helper method to extract values from log entries
- */
+//helper
+// example line: [timestamp] File: name | Action: UPLOAD | Status: SUCCESS | Access: PUBLIC
 private static String extractValue(String line, String startMarker, String endMarker) {
     try {
-        int startIdx = line.indexOf(startMarker);
+        int startIdx = line.indexOf(startMarker); //example: "File: " = indexof("File: ")
         if (startIdx == -1) return null;
         
-        startIdx += startMarker.length();
+        startIdx += startMarker.length(); //startIdx += 6
         
         int endIdx;
         if (endMarker.equals("$")) {
             // Extract till end of line
             endIdx = line.length();
         } else {
-            endIdx = line.indexOf(endMarker, startIdx);
+            endIdx = line.indexOf(endMarker, startIdx);  // endIdx = indexof(" |", search from)
             if (endIdx == -1) return null;
         }
         
-        return line.substring(startIdx, endIdx).trim();
+        return line.substring(startIdx, endIdx).trim(); 
     } catch (Exception e) {
         return null;
     }
 }
 
-/**
- * Saves all messages to disk before server shutdown
- */
-public static void saveMessagesToFile() {
+
+ //Appends a single message to the file immediately when created
+ //format: username|||messageID|||content|||read
+public static void appendMessageToFile(String username, Message msg) {
     try {
         String messagePath = SERVER_DATA_DIR + "message_history.txt";
-        try (java.io.FileWriter fw = new java.io.FileWriter(messagePath);
+        
+        try (java.io.FileWriter fw = new java.io.FileWriter(messagePath, true); // true = append mode
              java.io.BufferedWriter bw = new java.io.BufferedWriter(fw)) {
             
-            for (Map.Entry<String, List<Message>> entry : userMessages.entrySet()) {
-                String username = entry.getKey();
-                List<Message> messages = entry.getValue();
-                
-                for (Message msg : messages) {
-                    // Format: username|||messageID|||content|||timestamp|||read
-                    String line = String.format("%s|||%s|||%s|||%s|||%s%n",
-                        username,
-                        msg.getMessageID(),
-                        msg.getContent().replace("\n", "<NEWLINE>"), // Escape newlines
-                        msg.getTimestamp().getTime(), // Store as milliseconds
-                        msg.isRead()
-                    );
-                    bw.write(line);
-                }
-            }
-            
-            System.out.println("Messages saved to file.");
+            // Format: username|||messageID|||content|||read
+            String line = String.format("%s|||%s|||%s|||%s%n",
+                username,
+                msg.getMessageID(),
+                msg.getContent().replace("\n", "<NEWLINE>"), // Escape newlines
+                msg.isRead()
+            );
+            bw.write(line);
         }
     } catch (Exception e) {
-        System.err.println("Error saving messages: " + e.getMessage());
+        System.err.println("Error appending message to file: " + e.getMessage());
     }
 }
 
-/**
- * Loads messages from disk at server startup
- */
+// Load messages from file during server startup
 public static void loadMessagesFromFile() {
     try {
         String messagePath = SERVER_DATA_DIR + "message_history.txt";
@@ -362,20 +349,18 @@ public static void loadMessagesFromFile() {
             while ((line = br.readLine()) != null) {
                 String[] parts = line.split("\\|\\|\\|");
                 
-                if (parts.length == 5) {
+                if (parts.length == 4) {
                     String username = parts[0];
                     String messageID = parts[1];
                     String content = parts[2].replace("<NEWLINE>", "\n");
-                    long timestamp = Long.parseLong(parts[3]);
-                    boolean read = Boolean.parseBoolean(parts[4]);
+                    boolean read = Boolean.parseBoolean(parts[3]);
                     
                     // Reconstruct Message object
                     Message msg = new Message(messageID, username, content);
-                    msg.setTimestamp(new java.util.Date(timestamp));
                     msg.setRead(read);
                     
                     // Add to userMessages
-                    userMessages.computeIfAbsent(username, k -> new ArrayList<>()).add(msg);
+                    userMessages.computeIfAbsent(username, k -> new ArrayList<>()).add(msg); //cpmputeIfAbsent = jodi username er jonne list na thake tahole notun list create kore dibe, jodi thake tahole existing list ta return korbe
                     messageCount++;
                 }
             }
@@ -389,13 +374,34 @@ public static void loadMessagesFromFile() {
     }
 }
 
-/**
- * Get ALL messages (read and unread) for a user
- */
+
+
+
+//Get ALL messages (read and unread) for a user
+
 public static List<Message> getAllMessages(String username) {
     List<Message> messages = userMessages.get(username);
     if (messages == null) return new ArrayList<>();
     return new ArrayList<>(messages); // Return a copy
+}
+
+
+// Find existing file by owner and file name
+
+public static String findExistingFile(String username, String fileName) {
+    for (Map.Entry<String, FileMetadata> entry : fileRegistry.entrySet()) {
+        FileMetadata metadata = entry.getValue();
+        if (metadata.getOwner().equals(username) && 
+            metadata.getFileName().equals(fileName)) {
+            return entry.getKey(); // Return the fileID
+        }
+    }
+    return null; // File not found
+}
+
+// Remove file from registry
+public static void removeFile(String fileID) {
+    fileRegistry.remove(fileID);
 }
 
 

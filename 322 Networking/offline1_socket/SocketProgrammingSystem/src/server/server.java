@@ -25,6 +25,10 @@ public class server {
         System.out.println("Max Chunk Size: " + (ServerConfig.MAX_CHUNK_SIZE / 1024) + " KB");
         System.out.println("===========================");
 
+
+        //initially history restore korbe
+
+
         // Load existing users from directory
         System.out.println("\nLoading existing users...");
         ServerConfig.loadExistingUsers();
@@ -32,31 +36,26 @@ public class server {
         System.out.println("Loading existing files...");
         ServerConfig.loadExistingFiles();
         // Load message history
-    // System.out.println("Loading message history...");
-    // ServerConfig.loadMessagesFromFile();
+        System.out.println("Loading message history...");
+        ServerConfig.loadMessagesFromFile();
     
-    // // Add shutdown hook to save messages before exit
-    // Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-    //     System.out.println("\nShutting down server...");
-    //     ServerConfig.saveMessagesToFile();
-    //     System.out.println("Server stopped.");
-    // }));
+ 
         
 
         //crearte server socket
-        try(ServerSocket welcomeSocket = new ServerSocket(ServerConfig.SERVER_PORT)) {
+        try(ServerSocket welcomeSocket = new ServerSocket(ServerConfig.SERVER_PORT)) { //6666
             System.out.println("Server is listening on port " + ServerConfig.SERVER_PORT + "...");
 
             while (true) {
                 try {
                     // Wait for client connection
                     System.out.println("Waiting for connection...");
-                    Socket socket = welcomeSocket.accept();
-                    System.out.println("Connection established from: " + socket.getInetAddress().getHostAddress());
+                    Socket socket = welcomeSocket.accept(); // ekhane block kore thakbe joto khon na kono client connect korche
+                    System.out.println("Connection established from: " + socket.getInetAddress().getHostAddress()); // client er IP ta dekhabe
                     
                     // Create and start client handler thread
                     ClientHandler handler = new ClientHandler(socket);
-                    handler.start();
+                    handler.start(); // new thread e client handle korbe
                     
                 } catch (IOException e) {
                     System.err.println("Error accepting client connection: " + e.getMessage());
