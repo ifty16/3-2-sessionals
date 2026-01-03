@@ -1,0 +1,8 @@
+path: dataset
+train: train/images
+
+names:
+  0: bhaat
+  1: egg
+  2: finger
+  3: khichuri

@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['bhaat', 'egg', 'finger', 'khichuri']
+
+roboflow:
+  workspace: foodintake
+  project: food-intake
+  version: 1
+  license: MIT
+  url: https://universe.roboflow.com/foodintake/food-intake/dataset/1

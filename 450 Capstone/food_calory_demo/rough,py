@@ -1,0 +1,21 @@
+from ultralytics import YOLO
+import cv2
+
+# Try last.pt instead of best.pt
+model = YOLO("runs/segment/food_seg_demo3/weights/last.pt")
+
+print("Class names:", model.names)
+print("Running inference with last.pt...")
+
+img_path = "test.jpg"
+results = model(img_path, conf=0.01, verbose=True)
+
+if len(results[0].boxes) > 0:
+    print(f"\n✅ Found {len(results[0].boxes)} detection(s) with last.pt!")
+else:
+    print("\n❌ Still no detections with last.pt")
+
+annotated = results[0].plot()
+cv2.imshow("Food Segmentation", annotated)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
