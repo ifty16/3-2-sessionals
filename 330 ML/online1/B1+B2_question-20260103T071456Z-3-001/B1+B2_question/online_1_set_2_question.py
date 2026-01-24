@@ -8,7 +8,7 @@ def windowing_average_imputation(x, k=3):
     # TODO: Windowing average imputation
     
     df = pd.DataFrame(x)
-    rolling_means = df.rolling(window=k, min_periods=1, center=True, axis=0).mean() 
+    rolling_means = df.rolling(window=k).mean() 
     # min_periods=1 ensures that we compute mean even if there are fewer than k values in the window
     # center=True makes the window centered around the current index
     #window size k means we take k values (k//2 before and k//2 after the current index)

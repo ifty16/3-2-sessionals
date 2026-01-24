@@ -347,7 +347,7 @@ public static void loadMessagesFromFile() {
         try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(msgFile))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[] parts = line.split("\\|\\|\\|");
+                String[] parts = line.split("\\|\\|\\|"); // \| special 
                 
                 if (parts.length == 4) {
                     String username = parts[0];
