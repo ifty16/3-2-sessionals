@@ -1,0 +1,63 @@
+wire:
+
+same = crossover
+PC-router =  crossover
+differeent device = coper straight
+router- router = fiber
+
+
+PC config==> IPV4 (192.168.0.1) -> subnet mask(255.255.255.0) -> default gatway(router er ip add)
+
+router interface config ==> CLI-> no->en->conf t -> int fa0/0 -> ip address <address set> <subnet mask> -> no shutdown
+
+routing:
+
+show routes ==> CLI-> show ip route
+static routing ==> conf t-> ip route <destination net add ___.___.___.0> <subnet mask> <exit interface/next hop ip>
+dynamic routing ==> conf t-> router rip -> version 2 -> network <directly connected net add 1> -> network <add2> -> no auto-summary
+
+VLAN:
+
+vlan create ==> vlan # -> name <name set>
+switch config
+single vlan==> conf t -> int fa_/_ -> switchport mode access -> switchport access vlan #
+multiple vlan==> conf t -> int fa_/_ -> switchport mode trunk -> swichport trunk native vlan 1 -> switchport trunk allower vlan #,#,#
+
+router subint config==> conf t-> int fa0/0.10 -> encapsulation dot1q 10 -> ip address ___.___.10._ 255.255.255.0(etai default gatway hobe)
+                                exit -> int fa0/0 -> no shutdown
+
+
+passwords:
+
+enable ==> conf t->enable secret <password>
+user ==> conf t ->line console 0 -> password <pass> -> login
+console ==> conft-> line vty <0> <4> -> password <pass>
+remote access from pc => cmd->telnet <router ip add>
+name change ==> conf t -> hostname <name>
+
+
+ACL:
+
+show list ==> do show access-list
+rmv list 1 ==> no access-list 1
+standard acl ==> conf t-> access-list <0-99> deny/permit host <host ip> ------(binding)---> int fa4/0 -> ip access-group 1 in
+extended acl ==> access-list 100 deny/permit icpm <_._._._> < wild mask 0.0.0.255> <host destination> <ip add> <echo>---(binding)-->
+
+
+NAT :
+
+Private IP
+10.0.0.0 - 10.255.255.255
+172.16.0.0 - 172.31.255.255
+192.168.0.0 - 192.168.255.255
+
+Public IP
+203.165.200.1
+
+list create => access-list 1 permit <192.168.1.0> <wild mask 0.0.0.255> 
+pool create for dynamic =>ip nat pool pool_1 <start ip> <end-ip> <netmask 255.255.255.0>
+NAT ==> ip nat inside source <list 1> <int fa4/0 or pool pool_1> overload -> int <> -> ip nat inside -> int <> -> ip nat outside
+
+dynamic routing for NAT :
+
+conf t-> int loopback 0 -> ip address <x.y.z.w > 255.255.255.0 ->router rip -> network x.y.z.w 

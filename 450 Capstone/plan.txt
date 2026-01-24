@@ -1,0 +1,109 @@
+Title: Automated Multi-View Food Calorie Estimation System
+
+1. Introduction and Objective
+
+Estimating calorie intake from food images is a challenging problem due to the variability in food appearance, shape, and portion size. Even human experts, when shown only images of food, can provide only approximate calorie estimates rather than exact measurements. This project aims to automate this human estimation process using computer vision and machine learning, acknowledging that some level of error is fundamentally unavoidable.
+
+The goal of this system is not to achieve perfect physical measurement, but to build a structured, repeatable, and scalable method that replaces manual visual estimation. By detecting food items, estimating their physical volume from images, and mapping volume to calorie values, the system seeks to provide a practical approximation of food calorie intake.
+
+2. System Overview
+
+The proposed system estimates calories by combining information from:
+- A single top-view image of the plate
+- Multiple side-view images taken from different directions
+
+The key idea is to separate the problem into:
+- Identifying and measuring the horizontal extent (area) of food from the top view
+- Estimating the vertical extent (height) of food from side views
+- Combining both to estimate volume and calories
+
+3. Detailed System Work Plan
+
+Step 1: Image Acquisition
+
+The user captures:
+- One top-view image of the plate containing food
+- Multiple side-view images (front, right, back, and left views)
+
+UI guidance is provided to keep the plate centered and maintain consistent camera orientation across images.
+
+Step 2: Food Classification and Segmentation (Top View)
+
+A deep learning model (e.g., YOLOv8 with segmentation) is applied to the top-view image to:
+- Detect each food item present on the plate
+- Classify each detected item (e.g., rice, bread, banana)
+- Generate pixel-wise segmentation masks for each food item
+
+From these segmentation masks, the system computes:
+- Pixel area of each food item
+- Horizontal position (x-range) of each food item on the plate
+
+Step 3: Area Estimation
+
+Using a calibration method (described later), pixel areas are converted into real-world areas (cm²). This provides an estimate of the surface area occupied by each food item.
+
+Step 4: Side-View Processing and Height Extraction
+
+Each side-view image is processed independently using classical image processing techniques:
+- Background removal or edge detection
+- Extraction of the food silhouette
+- Construction of a height profile representing the maximum vertical pixel value at each horizontal position
+
+The system does not classify food items in side views. Instead, it relies on the fixed camera orientation to preserve left–right consistency between the top and side views.
+
+Step 5: Height Assignment to Food Items
+
+Using the horizontal position information from the top view:
+- Each food item’s x-range is mapped to the corresponding region in the side-view height profile
+- Height estimates are extracted for each food item from the side views where it is visible
+
+Step 6: Height Aggregation
+
+Since each food item appears in multiple side views, multiple height estimates may be available. A robust aggregation strategy is applied, such as:
+- Taking the maximum observed height
+- Or using the median height
+
+This reduces the effect of perspective distortion and partial occlusion.
+
+Step 7: Volume Estimation
+
+For each food item, volume is estimated using:
+Volume = Area × Height
+
+This provides an approximate physical volume for each detected food item.
+
+Step 8: Calorie Estimation
+
+Using predefined food-specific calorie density values, the system converts volume estimates into calorie estimates. The final output is the estimated calorie contribution of each food item and the total meal.
+
+4. Calibration and Pixel-to-Real-World Mapping Design
+
+Accurate calibration is required to convert pixel measurements into real-world units. Several calibration strategies are considered:
+
+Method 1: Thumb-Based Calibration in All Views
+
+The user places their thumb in the top view and all side views. The known thumb width or length is used to compute pixel-to-centimeter scale for both area and height measurements.
+
+This method is accurate in theory but impractical due to hand occlusion, poor user experience, and inconsistent thumb placement in side views.
+
+Method 2: Thumb-Based Calibration in Top View Only
+
+The user places their thumb only in the top-view image. This allows accurate calibration of pixel-to-area conversion. Side views are calibrated separately using a fixed camera setup or a one-time calibration object (e.g., ruler, coin, or plate thickness).
+
+This approach provides a good balance between accuracy and usability and avoids hand interference in side-view images.
+
+Method 3: Plate-Based Calibration
+
+Instead of using a thumb, the system detects the plate boundary and uses a known or user-selected plate diameter for calibration. Once the plate is calibrated, no additional reference object is needed.
+
+This method improves usability but assumes relatively standard plate sizes.
+
+Method 4: No Explicit Calibration with UI Constraints
+
+In this approach, the system enforces strict UI instructions requiring the user to take photos from a specific height, distance, and angle. Pixel-to-real-world mapping is assumed to be constant.
+
+This method minimizes user effort but is highly sensitive to user error and device variability and offers the lowest accuracy.
+
+5. Summary
+
+The proposed system automates food calorie estimation by decomposing the problem into detection, segmentation, area estimation, height estimation, and volume computation. While the system cannot eliminate fundamental estimation errors inherent in visual analysis, it provides a consistent and scalable alternative to manual calorie estimation, making it suitable for real-world dietary assessment applications.

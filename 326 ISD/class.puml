@@ -1,0 +1,436 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<Abstract>> LightYellow
+    BackgroundColor<<Interface>> LightBlue
+    BackgroundColor<<Enum>> LightGray
+}
+
+' ========== ENUMERATIONS ==========
+enum BookingStatus <<Enum>> {
+    REQUESTED
+    CONFIRMED
+    CHECKED_IN
+    COMPLETED
+    CANCELLED
+    REJECTED
+    EXPIRED
+}
+
+enum PaymentStatus <<Enum>> {
+    PENDING
+    AUTHORIZED
+    CAPTURED
+    REFUNDED
+    FAILED
+}
+
+enum NotificationType <<Enum>> {
+    EMAIL
+    SMS
+    PUSH
+}
+
+enum CancellationPolicy <<Enum>> {
+    FLEXIBLE
+    MODERATE
+    STRICT
+    NON_REFUNDABLE
+}
+
+' ========== CORE ENTITY CLASSES ==========
+
+abstract class User {
+    - userId: String
+    - email: String
+    - password: String
+    - firstName: String
+    - lastName: String
+    - phoneNumber: String
+    - profilePhoto: String
+    - isVerified: boolean
+    - createdAt: DateTime
+    - lastLogin: DateTime
+    --
+    + login(): boolean
+    + logout(): void
+    + updateProfile(): void
+    + verifyIdentity(): boolean
+}
+
+class Guest {
+    - guestId: String
+    - preferredLanguage: String
+    - emergencyContact: String
+    --
+    + searchListings(criteria): List<Listing>
+    + viewHostCriteria(listingId): PreBookingRequirements
+    + requestReservation(listing, dates): Booking
+    + instantBook(listing, dates): Booking
+    + trackBookingStatus(bookingId): BookingStatus
+    + viewBookingHistory(): List<Booking>
+    + cancelReservation(bookingId): void
+    + modifyReservation(bookingId, newDates): void
+    + leaveReview(bookingId, review): void
+}
+
+class Host {
+    - hostId: String
+    - businessName: String
+    - taxId: String
+    - responseRate: float
+    - averageResponseTime: int
+    --
+    + reviewBookingRequests(): List<Booking>
+    + approveReservation(bookingId): void
+    + rejectReservation(bookingId, reason): void
+    + manageCalendar(): HostCalendar
+    + setAvailabilityRules(): void
+    + setBookingRequirements(): void
+    + viewEarnings(period): FinancialReport
+    + managePayoutSettings(): void
+    + respondToReview(reviewId, response): void
+}
+
+class Admin {
+    - adminId: String
+    - role: String
+    - permissions: List<String>
+    --
+    + resolveDispute(disputeId): void
+    + overrideReservation(bookingId): void
+    + viewAllBookings(): List<Booking>
+    + generateReport(type): Report
+}
+
+' ========== BOOKING & RESERVATION ==========
+
+class Booking {
+    - bookingId: String
+    - bookingReference: String
+    - status: BookingStatus
+    - checkInDate: Date
+    - checkOutDate: Date
+    - numberOfGuests: int
+    - totalAmount: decimal
+    - bookingDate: DateTime
+    - lastModifiedDate: DateTime
+    --
+    + validateEligibility(): boolean
+    + confirmBooking(): void
+    + cancelBooking(): void
+    + modifyDates(newCheckIn, newCheckOut): void
+    + calculateRefund(): decimal
+    + getStatusHistory(): List<StatusChange>
+}
+
+class PreBookingRequirements {
+    - requirementId: String
+    - minimumStay: int
+    - maximumStay: int
+    - allowPets: boolean
+    - allowParties: boolean
+    - requireIDVerification: boolean
+    - requirePhoneVerification: boolean
+    - minimumAccountAge: int
+    - instantBookEnabled: boolean
+    --
+    + checkCompliance(guest): boolean
+    + getRequirementsList(): List<String>
+}
+
+class BookingHistory {
+    - historyId: String
+    - userId: String
+    - totalBookings: int
+    - upcomingTrips: int
+    - pastTrips: int
+    --
+    + addBooking(booking): void
+    + getUpcomingBookings(): List<Booking>
+    + getPastBookings(): List<Booking>
+    + archiveBooking(bookingId): void
+}
+
+class StatusChange {
+    - changeId: String
+    - previousStatus: BookingStatus
+    - newStatus: BookingStatus
+    - changedBy: String
+    - changeDate: DateTime
+    - reason: String
+    --
+    + logStatusChange(): void
+}
+
+' ========== LISTING & CALENDAR ==========
+
+class Listing {
+    - listingId: String
+    - title: String
+    - description: String
+    - propertyType: String
+    - address: Address
+    - pricePerNight: decimal
+    - maxGuests: int
+    - amenities: List<String>
+    - photos: List<String>
+    - averageRating: float
+    --
+    + updateListing(): void
+    + checkAvailability(dates): boolean
+    + getPreBookingRequirements(): PreBookingRequirements
+}
+
+class HostCalendar {
+    - calendarId: String
+    - hostId: String
+    - timeZone: String
+    - lastSyncDate: DateTime
+    --
+    + getAvailableDates(startDate, endDate): List<Date>
+    + blockDates(dates, reason): void
+    + unblockDates(dates): void
+    + syncWithExternal(): void
+}
+
+class AvailabilityRule {
+    - ruleId: String
+    - dayOfWeek: String
+    - startDate: Date
+    - endDate: Date
+    - isAvailable: boolean
+    - minimumStay: int
+    - priceMultiplier: float
+    --
+    + applyRule(): void
+    + validateRule(): boolean
+}
+
+class ExternalCalendar {
+    - externalId: String
+    - calendarType: String
+    - syncUrl: String
+    - lastSyncTime: DateTime
+    --
+    + sync(): void
+    + importBlockedDates(): List<Date>
+}
+
+' ========== PAYMENT & FINANCIAL ==========
+
+class Payment {
+    - paymentId: String
+    - amount: decimal
+    - currency: String
+    - status: PaymentStatus
+    - paymentMethod: String
+    - paymentDate: DateTime
+    - transactionId: String
+    --
+    + processPayment(): boolean
+    + authorizePayment(): boolean
+    + capturePayment(): boolean
+    + refundPayment(amount): boolean
+    + getReceipt(): Receipt
+}
+
+class Refund {
+    - refundId: String
+    - originalPaymentId: String
+    - refundAmount: decimal
+    - refundReason: String
+    - refundDate: DateTime
+    - status: PaymentStatus
+    --
+    + calculateRefundAmount(policy): decimal
+    + processRefund(): boolean
+}
+
+class HostEarnings {
+    - earningsId: String
+    - hostId: String
+    - totalEarnings: decimal
+    - pendingEarnings: decimal
+    - availableForPayout: decimal
+    - currency: String
+    --
+    + addEarning(booking): void
+    + calculateServiceFee(): decimal
+    + getEarningsReport(period): Report
+}
+
+class PayoutSettings {
+    - settingsId: String
+    - hostId: String
+    - payoutMethod: String
+    - accountDetails: String
+    - payoutSchedule: String
+    - minimumPayoutAmount: decimal
+    --
+    + updateSettings(): void
+    + validateSettings(): boolean
+}
+
+class Invoice {
+    - invoiceId: String
+    - bookingId: String
+    - issueDate: DateTime
+    - totalAmount: decimal
+    - taxAmount: decimal
+    - serviceFee: decimal
+    --
+    + generateInvoice(): void
+    + sendToGuest(): void
+}
+
+' ========== NOTIFICATION ==========
+
+class Notification {
+    - notificationId: String
+    - userId: String
+    - type: NotificationType
+    - title: String
+    - message: String
+    - isRead: boolean
+    - sentDate: DateTime
+    --
+    + send(): boolean
+    + markAsRead(): void
+}
+
+class ConfirmationNotification {
+    - bookingDetails: String
+    - checkInInstructions: String
+    - hostContact: String
+    --
+    + sendMultiChannel(): void
+    + includeCalendarInvite(): void
+}
+
+' ========== REVIEW & DISPUTE ==========
+
+class Review {
+    - reviewId: String
+    - bookingId: String
+    - rating: int
+    - comment: String
+    - reviewDate: DateTime
+    - isVisible: boolean
+    --
+    + submitReview(): void
+    + editReview(): void
+    + flagInappropriate(): void
+}
+
+class HostResponse {
+    - responseId: String
+    - reviewId: String
+    - responseText: String
+    - responseDate: DateTime
+    --
+    + submitResponse(): void
+}
+
+class Dispute {
+    - disputeId: String
+    - bookingId: String
+    - raisedBy: String
+    - reason: String
+    - status: String
+    - resolution: String
+    - createdDate: DateTime
+    - resolvedDate: DateTime
+    --
+    + raiseDispute(): void
+    + resolveDispute(resolution): void
+    + escalateToAdmin(): void
+}
+
+' ========== RELATIONSHIPS ==========
+
+' User hierarchy
+User <|-- Guest
+User <|-- Host
+User <|-- Admin
+
+' Guest associations
+Guest "1" -- "0..*" Booking : makes >
+Guest "1" -- "1" BookingHistory : has >
+Guest "1" -- "0..*" Review : writes >
+
+' Host associations
+Host "1" -- "0..*" Listing : owns >
+Host "1" -- "1" HostCalendar : manages >
+Host "1" -- "1" HostEarnings : earns >
+Host "1" -- "1" PayoutSettings : configures >
+Host "1" -- "0..*" HostResponse : writes >
+
+' Booking relationships
+Booking "*" -- "1" Guest : booked by
+Booking "*" -- "1" Listing : for >
+Booking "1" -- "1" Payment : has >
+Booking "1" -- "0..1" Refund : may have >
+Booking "1" -- "0..1" Review : receives >
+Booking "1" -- "0..*" StatusChange : tracks >
+Booking "1" -- "0..1" Dispute : may have >
+Booking "1" -- "1" Invoice : generates >
+
+' Listing relationships
+Listing "1" -- "1" PreBookingRequirements : defines >
+Listing "*" -- "1" Host : listed by
+
+' Calendar relationships
+HostCalendar "1" -- "0..*" AvailabilityRule : has >
+HostCalendar "1" -- "0..*" ExternalCalendar : syncs with >
+HostCalendar "1" -- "*" Booking : blocks dates for
+
+' Payment relationships
+Payment "1" -- "0..1" Refund : may be refunded
+Payment "*" -- "1" Booking : for >
+
+' Notification relationships
+Notification <|-- ConfirmationNotification
+User "1" -- "0..*" Notification : receives >
+Booking "1" -- "0..*" Notification : triggers >
+
+' Review relationships
+Review "1" -- "0..1" HostResponse : may have >
+Review "*" -- "1" Booking : for >
+
+' Dispute relationships
+Dispute "*" -- "1" Booking : related to
+Dispute "*" -- "1" Admin : resolved by
+
+' Enums
+Booking -- BookingStatus
+Payment -- PaymentStatus
+Refund -- PaymentStatus
+Notification -- NotificationType
+Listing -- CancellationPolicy
+
+note right of User
+  Abstract base class for all
+  platform users. Uses inheritance
+  for Guest, Host, Admin roles.
+end note
+
+note right of Booking
+  Central entity managing the
+  entire booking lifecycle from
+  request to completion.
+end note
+
+note right of Payment
+  Handles payment processing,
+  authorization, capture, and
+  connects to Payment Gateway.
+end note
+
+note bottom of HostCalendar
+  Manages availability, syncs with
+  external calendars (Google, iCal),
+  and blocks dates for bookings.
+end note
+
+@enduml

@@ -11,6 +11,13 @@
 *.mpeg
 *.3gp
 
+#image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+
 # Compressed files
 *.zip
 *.rar
@@ -38,3 +45,17 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+
+# PyTorch model checkpoints
+*.pth
+*.pth.tar
+
+# Common checkpoint directories
+checkpoints/
+checkpoint/
+models/
+saved_models/
+
+# Optional: ignore training artifacts
+*.ckpt
